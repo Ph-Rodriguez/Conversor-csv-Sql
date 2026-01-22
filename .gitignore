@@ -1,0 +1,14 @@
+# --- Segurança ---
+.env
+
+# --- Ambientes Virtuais ---
+venv/
+.venv/
+env/
+
+# --- Cache do Python ---
+__pycache__/
+*.py[cod]
+
+# --- Arquivos de Saída (Testes locais) ---
+*.sql
