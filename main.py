@@ -19,7 +19,6 @@ def conectar_banco():
         return None
 
 def main():
-    # Configuração das Flags
     parser = argparse.ArgumentParser(description="CSV para SQL - Ferramenta de Automação")
     parser.add_argument("-f", "--file", required=True, help="Caminho do arquivo CSV")
     parser.add_argument("-t", "--table", required=True, help="Nome da tabela destino")
@@ -28,40 +27,48 @@ def main():
 
     args = parser.parse_args()
 
-    linhas_sql = []
+    dados_para_inserir = []
+    cabecalho = []
 
-    # Processamento do CSV
     try:
         with open(args.file, newline='', encoding='utf-8') as csvfile:
             leitor = csv.reader(csvfile)
             cabecalho = next(leitor)
-            
             for linha in leitor:
-                # Tratamento de dados (Aspas e Números)
-                valores = [f"'{v.replace("'", "''")}'" if not v.isdigit() else v for v in linha]
-                sql = f"INSERT INTO {args.table} ({', '.join(cabecalho)}) VALUES ({', '.join(valores)});"
-                linhas_sql.append(sql)
+                # Mantemos os dados brutos para o banco tratar a tipagem
+                dados_para_inserir.append(tuple(linha))
     except FileNotFoundError:
         print(f"❌ Arquivo '{args.file}' não encontrado.")
         return
 
-    # Ação 1: Salvar em arquivo
+    # Ação 1: Salvar em arquivo (Mantendo sua lógica de gerar o script texto)
     if args.output:
         with open(args.output, "w", encoding='utf-8') as f:
-            f.write("\n".join(linhas_sql))
-        print(f"✅ Arquivo gerado: {args.output}")
+            for linha in dados_para_inserir:
+                valores_str = [f"'{str(v).replace("'", "''")}'" for v in linha]
+                sql = f"INSERT INTO {args.table} ({', '.join(cabecalho)}) VALUES ({', '.join(valores_str)});\n"
+                f.write(sql)
+        print(f"✅ Arquivo SQL gerado: {args.output}")
 
-    # Ação 2: Inserir no Banco
+    # Ação 2: Inserir no Banco (Uso de executemany para performance e segurança)
     if args.insert:
         con = conectar_banco()
         if con:
-            cursor = con.cursor()
-            print(f"🚀 Inserindo {len(linhas_sql)} linhas na tabela '{args.table}'...")
-            for sql in linhas_sql:
-                cursor.execute(sql)
-            con.commit()
-            print("✨ Sucesso! Dados inseridos.")
-            con.close()
+            try:
+                cursor = con.cursor()
+                # Placeholder dinâmico: %s, %s, %s...
+                placeholders = ", ".join(["%s"] * len(cabecalho))
+                colunas = ", ".join(cabecalho)
+                query = f"INSERT INTO {args.table} ({colunas}) VALUES ({placeholders})"
+                
+                print(f"🚀 Inserindo {len(dados_para_inserir)} linhas...")
+                cursor.executemany(query, dados_para_inserir)
+                con.commit()
+                print("✨ Sucesso! Dados inseridos com segurança.")
+            except mysql.connector.Error as err:
+                print(f"❌ Erro na inserção: {err}")
+            finally:
+                con.close()
 
 if __name__ == "__main__":
     main()
